@@ -1,11 +1,13 @@
 import type { AWS } from '@serverless/typescript';
 
-import hello from '@functions/hello';
-
 const serverlessConfiguration: AWS = {
   service: 'sinapsis-campaigns-backend',
   frameworkVersion: '3',
-  plugins: ['serverless-esbuild'],
+  plugins: [
+    "serverless-dotenv-plugin",
+    'serverless-esbuild',
+    'serverless-offline'
+  ],
   provider: {
     name: 'aws',
     runtime: 'nodejs14.x',
@@ -16,10 +18,34 @@ const serverlessConfiguration: AWS = {
     environment: {
       AWS_NODEJS_CONNECTION_REUSE_ENABLED: '1',
       NODE_OPTIONS: '--enable-source-maps --stack-trace-limit=1000',
+      DB_HOST: "${env:DB_HOST, 'NOT_FOUND'}",
+      DB_PORT: "${env:DB_PORT, 'NOT_FOUND'}",
+      DB_USER: "${env:DB_USER, 'NOT_FOUND'}",
+      DB_PASSWORD: "${env:DB_PASSWORD, 'NOT_FOUND'}",
+      DB_NAME: "${env:DB_NAME, 'NOT_FOUND'}",
     },
   },
-  // import the function via paths
-  functions: { hello },
+  functions: {
+    createCampaign: {
+      handler: "src/handlers/campaign.create",
+      events: [{ http: { path: "${self:custom.apiPrefix}/campaigns", method: "post" } }]
+    },
+
+    processCampaign: {
+      handler: "src/handlers/campaign.process",
+      events: [{ http: { path: "${self:custom.apiPrefix}/campaigns/{id}/process", method: "post" } }]
+    },
+
+    listCampaigns: {
+      handler: "src/handlers/campaign.list",
+      events: [{ http: { path: "${self:custom.apiPrefix}/campaigns", method: "get" } }]
+    },
+
+    campaignMessages: {
+      handler: "src/handlers/campaign.messages",
+      events: [{ http: { path: "${self:custom.apiPrefix}/campaigns/{id}/messages", method: "get" } }]
+    }
+  },
   package: { individually: true },
   custom: {
     esbuild: {
@@ -30,8 +56,9 @@ const serverlessConfiguration: AWS = {
       target: 'node14',
       define: { 'require.resolve': undefined },
       platform: 'node',
-      concurrency: 10,
+      concurrency: 10
     },
+    apiPrefix: "${env:API_PREFIX, 'api/v1'}"
   },
 };
 

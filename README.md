@@ -1,95 +1,207 @@
-# Serverless - AWS Node.js Typescript
+# Sinapsis Campaigns - Backend
 
-This project has been generated using the `aws-nodejs-typescript` template from the [Serverless framework](https://www.serverless.com/).
+Backend para la gestión y simulación del envío de campañas de marketing por SMS.  
+Desarrollado como parte de una prueba técnica para el puesto **Full Stack Semi Senior**.
 
-For detailed instructions, please refer to the [documentation](https://www.serverless.com/framework/docs/providers/aws/).
+---
 
-## Installation/deployment instructions
+## Arquitectura y Stack
 
-Depending on your preferred package manager, follow the instructions below to deploy your project.
+- **Node.js 18**
+- **TypeScript**
+- **Serverless Framework**
+- **AWS Lambda (simulado con serverless-offline)**
+- **MySQL**
+- **OpenAPI 3 (documentación)**
+- **serverless-offline** para desarrollo local
 
-> **Requirements**: NodeJS `lts/fermium (v.14.15.0)`. If you're using [nvm](https://github.com/nvm-sh/nvm), run `nvm use` to ensure you're using the same Node version in local and in your lambda's runtime.
+Arquitectura orientada a dominios (campaigns, messages), siguiendo buenas prácticas de mantenibilidad y escalabilidad.
 
-### Using NPM
+---
 
-- Run `npm i` to install the project dependencies
-- Run `npx sls deploy` to deploy this stack to AWS
+## Estructura del Proyecto
+```bash
 
-### Using Yarn
-
-- Run `yarn` to install the project dependencies
-- Run `yarn sls deploy` to deploy this stack to AWS
-
-## Test your service
-
-This template contains a single lambda function triggered by an HTTP request made on the provisioned API Gateway REST API `/hello` route with `POST` method. The request body must be provided as `application/json`. The body structure is tested by API Gateway against `src/functions/hello/schema.ts` JSON-Schema definition: it must contain the `name` property.
-
-- requesting any other path than `/hello` with any other method than `POST` will result in API Gateway returning a `403` HTTP error code
-- sending a `POST` request to `/hello` with a payload **not** containing a string property named `name` will result in API Gateway returning a `400` HTTP error code
-- sending a `POST` request to `/hello` with a payload containing a string property named `name` will result in API Gateway returning a `200` HTTP status code with a message saluting the provided name and the detailed event processed by the lambda
-
-> :warning: As is, this template, once deployed, opens a **public** endpoint within your AWS account resources. Anybody with the URL can actively execute the API Gateway endpoint and the corresponding lambda. You should protect this endpoint with the authentication method of your choice.
-
-### Locally
-
-In order to test the hello function locally, run the following command:
-
-- `npx sls invoke local -f hello --path src/functions/hello/mock.json` if you're using NPM
-- `yarn sls invoke local -f hello --path src/functions/hello/mock.json` if you're using Yarn
-
-Check the [sls invoke local command documentation](https://www.serverless.com/framework/docs/providers/aws/cli-reference/invoke-local/) for more information.
-
-### Remotely
-
-Copy and replace your `url` - found in Serverless `deploy` command output - and `name` parameter in the following `curl` command in your terminal or in Postman to test your newly deployed application.
+├── src/
+│ ├── handlers/
+│ ├── services/
+│ ├── models/
+│ ├── config/
+│ ├── types/
+│ └── utils/
+└── README.md
+├── openapi.yaml
+├── serverless.ts
 
 ```
-curl --location --request POST 'https://myApiEndpoint/dev/hello' \
---header 'Content-Type: application/json' \
---data-raw '{
-    "name": "Frederic"
-}'
+---
+
+## Requisitos Previos
+
+    - Node.js >= 18
+    - npm >= 9
+    - MySQL >= 8
+    - Serverless Framework
+
+```bash
+Instalar Serverless Framework de forma global:
+    npm install -g serverless
 ```
 
-## Template features
 
-### Project structure
+## Base de Datos
 
-The project code base is mainly located within the `src` folder. This folder is divided in:
+    La base de datos se ejecuta en un entorno de MySQL
 
-- `functions` - containing code base and configuration for your lambda functions
-- `libs` - containing shared code base between your lambdas
+    Nombre de la Base de Datos : campaigns_db
+    Collation: utf8mb4_unicode_ci
+Script de Creación de Base de Datos - MySQL
+```bash
+
+    CREATE DATABASE IF NOT EXISTS campaigns_db;
+    USE campaigns_db;
+
+    CREATE TABLE customers (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        name VARCHAR(255) NOT NULL,
+        status BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE users (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        customer_id INT NOT NULL,
+        username VARCHAR(100) NOT NULL UNIQUE,
+        status BOOLEAN DEFAULT TRUE,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE
+    )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE campaigns (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        user_id INT NOT NULL,
+        name VARCHAR(255) NOT NULL,
+        process_date DATE NOT NULL,
+        process_hour TIME NOT NULL,
+        process_status INT DEFAULT 1, -- 1: pendiente, 2: en proceso, 3: finalizada
+        phone_list TEXT NOT NULL,
+        message_text TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE TABLE messages (
+        id INT PRIMARY KEY AUTO_INCREMENT,
+        campaign_id INT NOT NULL,
+        phone VARCHAR(20) NOT NULL,
+        text TEXT NOT NULL,
+        shipping_status INT DEFAULT 1, -- 1: pendiente, 2: enviado, 3: error
+        process_date DATE,
+        process_hour TIME,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (campaign_id) REFERENCES campaigns(id) ON DELETE CASCADE
+    )ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+    CREATE INDEX idx_campaigns_process_status ON campaigns(process_status);
+    CREATE INDEX idx_campaigns_process_date ON campaigns(process_date);
+    CREATE INDEX idx_messages_campaign_id ON messages(campaign_id);
+    CREATE INDEX idx_messages_shipping_status ON messages(shipping_status);
+    CREATE INDEX idx_users_customer_id ON users(customer_id);
+```
+Datos Iniciales (Seed)
+```bash
+
+    INSERT INTO customers (id, name, status) VALUES
+    (1, 'TechSolutions SAC.', true),
+    (2, 'Retail SAC', true),
+    (3, 'Sinapsis', true),
+    (4, 'EduSystems SA.', true),
+    (5, 'Transports SA', true);
+
+    INSERT INTO users (id, customer_id, username, status) VALUES
+    (1, 1, 'juan.perez', true),
+    (2, 1, 'ana.gomez', true),
+    (3, 2, 'carlos.lopez', false),
+    (4, 3, 'maria.rodriguez', true),
+    (5, 4, 'pedro.martinez', true);
+
+    INSERT INTO campaigns (id, user_id, name, process_date, process_hour, process_status, phone_list, message_text) VALUES
+    (1, 1, 'Campaña Navidad 2025', '2024-12-20', '10:30:00', 2, '+123456789,+987654321', '¡Felices Fiestas! Descuento especial del 20%'),
+    (2, 2, 'Promo Verano', '2024-07-15', '14:00:00', 1, '+112233445,+556677889', 'Disfruta del verano con nuestras ofertas exclusivas'),
+    (3, 3, 'Recordatorio Pago', '2024-01-10', '09:15:00', 3, '+998877665', 'Recordatorio: Su pago vence el 15 de enero'),
+    (4, 4, 'Nuevos Cursos', '2024-03-01', '16:45:00', 2, '+443322110,+667788990', 'Inscríbete a nuestros nuevos cursos disponibles'),
+    (5, 5, 'Seguimiento Envío', '2024-11-05', '11:20:00', 1, '+112233445,+998877665', 'Su paquete ha sido enviado. N° seguimiento: TRK789456');
+
+    INSERT INTO messages (id, campaign_id, phone, text, shipping_status, process_date, process_hour) VALUES
+    (1, 1, '+123456789', '¡Felices Fiestas! Descuento especial del 20%', 1, '2024-12-20', '10:31:00'),
+    (2, 1, '+987654321', '¡Felices Fiestas! Descuento especial del 20%', 2, '2024-12-20', '10:32:00'),
+    (3, 2, '+112233445', 'Disfruta del verano con nuestras ofertas exclusivas', 1, '2024-07-15', '14:01:00'),
+    (4, 2, '+556677889', 'Disfruta del verano con nuestras ofertas exclusivas', 3, '2024-07-15', '14:02:00'),
+    (5, 3, '+998877665', 'Recordatorio: Su pago vence el 15 de enero', 2, '2024-01-10', '09:16:00');
+```
+## Clonar Repositorio
+
+Clonar el proyecto
+
+```bash
+  git clone https://github.com/JesusChungaGuizado/sinapsis_campaigns_backend-.git
+```
+
+Ir al directorio del proyecto
+
+```bash
+  cd my-project
+```
+##  Variables de Entorno
+
+Crear un archivo .env en la raíz del proyecto:
+
+Las variables de entorno son cargadas mediante serverless-dotenv-plugin.
+
+```bash
+DB_HOST=127.0.0.1
+DB_USER=user
+DB_PORT=3306
+DB_PASSWORD=password
+DB_NAME=campaigns_db
+
+API_PREFIX=api/v1
 
 ```
-.
-├── src
-│   ├── functions               # Lambda configuration and source code folder
-│   │   ├── hello
-│   │   │   ├── handler.ts      # `Hello` lambda source code
-│   │   │   ├── index.ts        # `Hello` lambda Serverless configuration
-│   │   │   ├── mock.json       # `Hello` lambda input parameter, if any, for local invocation
-│   │   │   └── schema.ts       # `Hello` lambda input event JSON-Schema
-│   │   │
-│   │   └── index.ts            # Import/export of all lambda configurations
-│   │
-│   └── libs                    # Lambda shared code
-│       └── apiGateway.ts       # API Gateway specific helpers
-│       └── handlerResolver.ts  # Sharable library for resolving lambda handlers
-│       └── lambda.ts           # Lambda middleware
-│
-├── package.json
-├── serverless.ts               # Serverless service file
-├── tsconfig.json               # Typescript compiler configuration
-├── tsconfig.paths.json         # Typescript paths
-└── webpack.config.js           # Webpack configuration
+## Instalación de Dependencias
+```bash
+npm install
 ```
 
-### 3rd party libraries
+## Ejecución en Desarrollo
+```bash
+"sls:dev": "sls offline --stage develop --region us-east-1"
 
-- [json-schema-to-ts](https://github.com/ThomasAribart/json-schema-to-ts) - uses JSON-Schema definitions used by API Gateway for HTTP request validation to statically generate TypeScript types in your lambda's handler code base
-- [middy](https://github.com/middyjs/middy) - middleware engine for Node.Js lambda. This template uses [http-json-body-parser](https://github.com/middyjs/middy/tree/master/packages/http-json-body-parser) to convert API Gateway `event.body` property, originally passed as a stringified JSON, to its corresponding parsed object
-- [@serverless/typescript](https://github.com/serverless/typescript) - provides up-to-date TypeScript definitions for your `serverless.ts` service file
+Ejecutar el backend
+    npm run sls:dev
+```
 
-### Advanced usage
+## Endpoints Principales
+```bash
 
-Any tsconfig.json can be used, but if you do, set the environment variable `TS_NODE_CONFIG` for building the application, eg `TS_NODE_CONFIG=./tsconfig.app.json npx serverless webpack`
+| Método | Endpoint                 | Descripción                         |
+| ------ | ------------------------ | ----------------------------------- |
+| POST   | /campaigns               | Crear campaña                       |
+| POST   | /campaigns/{id}/process  | Procesar campaña                    |
+| GET    | /campaigns               | Listar campañas por rango de fechas |
+| GET    | /campaigns/{id}/messages | Ver mensajes de una campaña         |
+
+```
+
+## Documentación OpenAPI
+La documentación de la API está definida usando OpenAPI 3 en el archivo:
+
+```bash
+openapi.yaml
+```
+
+Puede ser visualizada mediante: https://editor.swagger.io

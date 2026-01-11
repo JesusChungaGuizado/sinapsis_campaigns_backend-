@@ -1,0 +1,124 @@
+openapi: 3.0.3
+info:
+  title: Campaign Service API
+  description: API para la gestión y envío de campañas de marketing
+  version: 1.0.0
+  contact:
+    name: Jesus Chunga
+    email: jesusalbertochungaguizado@gmail.com
+
+servers:
+  - url: http://localhost:3000/develop/api/v1/
+    description: Ejecución - Serverless Offline
+
+paths:
+  /campaigns:
+    get:
+      summary: Listar campañas por fechas
+      tags:
+        - Campaigns
+      parameters:
+        - in: query
+          name: startDate
+          required: true
+          schema:
+            type: string
+            format: date
+        - in: query
+          name: endDate
+          required: true
+          schema:
+            type: string
+            format: date
+      responses:
+        "200":
+          description: Campaña procesada
+    post:
+      summary: Crear una campaña
+      tags:
+        - Campaigns
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateCampaign"
+      responses:
+        "201":
+          description: Campaña creada correctamente
+        "500":
+          description: Error al crear la campaña
+
+  /campaigns/{id}/process:
+    post:
+      summary: Procesar campaña
+      tags:
+        - Campaigns
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Campaña procesada correctamente
+        "500":
+          description: Error al procesar la campaña
+
+  /campaigns/{id}/messages:
+    get:
+      summary: Ver mensajes de una campaña
+      tags:
+        - Messages
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Lista de mensajes
+        "500":
+          description: Error al listar los mensajes
+
+components:
+  schemas:
+    CreateCampaign:
+      type: object
+      required:
+        - user_id
+        - name
+        - phone_list
+        - message_text
+      properties:
+        user_id:
+          type: integer
+        name:
+          type: string
+        phone_list:
+          type: string
+          example: "999111222,988777666"
+        message_text:
+          type: string
+
+    Campaign:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        process_status:
+          type: integer
+          description: 1=pending, 2=processing, 3=finished
+
+    Message:
+      type: object
+      properties:
+        phone:
+          type: string
+        shipping_status:
+          type: integer
+          description: 1=pending, 2=sent, 3=error
