@@ -34,7 +34,7 @@ export const listByDate = async (
         `
     SELECT * FROM campaigns
     WHERE process_date BETWEEN ? AND ?
-    ORDER BY process_date DESC
+    ORDER BY id DESC
     `,
         [startDate, endDate]
     );
